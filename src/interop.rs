@@ -27,11 +27,24 @@ pub(crate) mod strlen {
     }
 }
 
-// private module
 mod tensorflow {
     use core::slice;
     use core::str;
 
+    #[no_mangle]
+    // Repalcement for implementation in debug_log.cc
+    pub extern "C" fn DebugLog(s: *const cty::c_char) {
+        let slice = unsafe {
+            let len = super::strlen::strlen(s);
+            let ptr = s as *const u8;
+            slice::from_raw_parts(ptr, len as usize + 1)
+        };
+        log::info!("{}", str::from_utf8(slice).unwrap().trim());
+    }
+}
+
+#[cfg(feature = "interop_cstd")]
+mod cstd {
     #[allow(clippy::empty_loop)]
     #[no_mangle]
     // __cxa_pure_virtual is a function, address of which compiler writes
@@ -102,17 +115,6 @@ mod tensorflow {
             return *l - *r;
         }
     }}
-
-    #[no_mangle]
-    // Repalcement for implementation in debug_log.cc
-    pub extern "C" fn DebugLog(s: *const cty::c_char) {
-        let slice = unsafe {
-            let len = super::strlen::strlen(s);
-            let ptr = s as *const u8;
-            slice::from_raw_parts(ptr, len as usize + 1)
-        };
-        info!("{}", str::from_utf8(slice).unwrap().trim());
-    }
 
     // Underlying assert function for tensorflow to use
     #[no_mangle]

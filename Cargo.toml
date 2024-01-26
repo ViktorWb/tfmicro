@@ -79,6 +79,7 @@ std = ["managed/std"]
 alloc = ["managed/alloc"]
 no-c-warnings = []
 cmsis-nn = []
+interop_cstd = []
 
 [profile.release]
 debug = true # symbols are nice

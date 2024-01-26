@@ -141,8 +141,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate cpp;
 
 mod bindings;
