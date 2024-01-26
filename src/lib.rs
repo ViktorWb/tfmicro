@@ -195,3 +195,4 @@ pub use frontend::Frontend;
 pub use micro_interpreter::MicroInterpreter;
 pub use micro_op_resolver::{AllOpResolver, MutableOpResolver};
 pub use model::Model;
+pub use tensor::*;
