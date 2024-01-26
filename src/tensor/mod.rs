@@ -21,6 +21,7 @@ pub enum ElementType {
     Float32,
     UInt8,
     Int32,
+    Int8,
 }
 impl TryFrom<bindings::TfLiteType> for ElementType {
     type Error = bindings::TfLiteType;
@@ -32,6 +33,7 @@ impl TryFrom<bindings::TfLiteType> for ElementType {
             bindings::TfLiteType::kTfLiteFloat32 => Ok(Float32),
             bindings::TfLiteType::kTfLiteUInt8 => Ok(UInt8),
             bindings::TfLiteType::kTfLiteInt32 => Ok(Int32),
+            bindings::TfLiteType::kTfLiteInt8 => Ok(Int8),
             t => Err(t),
         }
     }
@@ -60,6 +62,11 @@ impl ElemTypeOf for u8 {
 impl ElemTypeOf for i32 {
     fn elem_type_of() -> ElementType {
         ElementType::Int32
+    }
+}
+impl ElemTypeOf for i8 {
+    fn elem_type_of() -> ElementType {
+        ElementType::Int8
     }
 }
 
