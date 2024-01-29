@@ -61,14 +61,11 @@
 
 use core::convert::TryInto;
 use core::marker::PhantomData;
-use core::mem::MaybeUninit;
 
-use crate::micro_error_reporter::MicroErrorReporter;
-use crate::micro_op_resolver::OpResolverRepr;
+use crate::micro_op_resolver::MutableOpResolver;
 use crate::tensor::{ElemTypeOf, Tensor, TensorInfo};
 use crate::Error;
 use crate::{model::Model, Status};
-use managed::ManagedSlice;
 
 use crate::bindings;
 use crate::bindings::tflite;
@@ -77,14 +74,9 @@ cpp! {{
     #include "tensorflow/lite/micro/micro_interpreter.h"
     #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
     #include "tensorflow/lite/micro/kernels/micro_ops.h"
-    #include "tensorflow/lite/micro/micro_error_reporter.h"
     #include "tensorflow/lite/micro/testing/micro_test.h"
     #include "tensorflow/lite/schema/schema_generated.h"
-    #include "tensorflow/lite/version.h"
 }}
-
-static mut ERROR_REPORTER: MaybeUninit<MicroErrorReporter> =
-    MaybeUninit::uninit();
 
 /// An interpreter for TensorFlow models
 pub struct MicroInterpreter<'a> {
@@ -118,75 +110,54 @@ impl<'a> MicroInterpreter<'a> {
     ///
     /// Returns `Error::AllocateTensors` if there is error in the call to
     /// `AllocateTensors`.
-    pub fn new<'m: 'a, 't: 'a, TArena, OpResolver>(
+    pub fn new<'m: 'a, 't: 'a>(
         model: &'m Model,
-        resolver: OpResolver,
-        tensor_arena: TArena,
-    ) -> Result<Self, Error>
-    where
-        OpResolver: OpResolverRepr,
-        TArena: Into<ManagedSlice<'t, u8>>,
-    {
+        resolver: MutableOpResolver,
+        tensor_arena: &'a mut [u8],
+    ) -> Result<Self, Error> {
         let resolver = resolver.to_inner();
-
-        let mut tensor_arena = tensor_arena.into();
 
         let tensor_arena_size = tensor_arena.len();
         let tensor_arena = tensor_arena.as_mut_ptr();
 
-        // Idempotent block to get a pointer to a MicroErrorReporter
-        let micro_error_reporter_ref = unsafe {
-            // Initialise MicroErrorReporter. We assume that `new` is a pure
-            // function that only fills in the MicroErrorReporter vtable
-            let micro_error_reporter = MicroErrorReporter::new();
-            ERROR_REPORTER = MaybeUninit::new(micro_error_reporter);
-
-            &ERROR_REPORTER // return reference with 'static lifetime
-        };
-
-        let mut status = bindings::TfLiteStatus::kTfLiteError;
+        let mut init_status = bindings::TfLiteStatus::kTfLiteError;
+        let mut allocate_status = bindings::TfLiteStatus::kTfLiteError;
 
         // Create interpreter
         let mut micro_interpreter = unsafe {
-            let status_ref = &mut status;
+            let init_status_ref = &mut init_status;
+            let allocate_status_ref = &mut allocate_status;
 
             cpp! ([
                 model as "const tflite::Model*",
                 resolver as "tflite::MicroMutableOpResolver<128>",
                 tensor_arena as "uint8_t*",
                 tensor_arena_size as "size_t",
-                micro_error_reporter_ref as "tflite::MicroErrorReporter*",
-                status_ref as "TfLiteStatus*"
+                init_status_ref as "TfLiteStatus*",
+                allocate_status_ref as "TfLiteStatus*"
             ] -> tflite::MicroInterpreter as "tflite::MicroInterpreter"
               {
-                  tflite::ErrorReporter* error_reporter = micro_error_reporter_ref;
-                  // Build an interpreter to run the model with.
                   tflite::MicroInterpreter interpreter(model,
                                                        resolver,
                                                        tensor_arena,
-                                                       tensor_arena_size,
-                                                       error_reporter);
+                                                       tensor_arena_size);
 
                   // Get status
-                  *status_ref = interpreter.initialization_status();
+                  *init_status_ref = interpreter.initialization_status();
+                  if (*init_status_ref != kTfLiteOk) {
+                    return interpreter;
+                  }
+
+                  *allocate_status_ref = interpreter.AllocateTensors();
 
                   return interpreter;
               })
         };
-        if status != bindings::TfLiteStatus::kTfLiteOk {
+
+        if init_status != bindings::TfLiteStatus::kTfLiteOk {
             return Err(Error::InterpreterInitError);
         }
-
-        // Allocate tensors
-        let allocate_tensors_status = unsafe {
-            let interpreter_ref = &mut micro_interpreter;
-
-            cpp! ([interpreter_ref as "tflite::MicroInterpreter*"]
-                   -> bindings::TfLiteStatus as "TfLiteStatus" {
-                return interpreter_ref->AllocateTensors();
-            })
-        };
-        if allocate_tensors_status != bindings::TfLiteStatus::kTfLiteOk {
+        if allocate_status != bindings::TfLiteStatus::kTfLiteOk {
             return Err(Error::AllocateTensorsError);
         }
 
@@ -343,28 +314,30 @@ impl<'a> MicroInterpreter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::micro_op_resolver::AllOpResolver;
+    use crate::micro_op_resolver::MutableOpResolver;
     use crate::tensor::ElementType;
 
     #[test]
     fn new_interpreter_static_arena() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         // model
-        let model = include_bytes!("../examples/models/hello_world.tflite");
+        let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/hello_world/models/hello_world_int8.tflite");
         let model = Model::from_buffer(&model[..]).unwrap();
 
         // resolver
-        let all_op_resolver = AllOpResolver::new();
+        let op_resolver = MutableOpResolver::empty()
+            .add_quantize()
+            .add_fully_connected()
+            .add_dequantize();
 
         // arena
         const TENSOR_ARENA_SIZE: usize = 4 * 1024;
         let mut tensor_arena: [u8; TENSOR_ARENA_SIZE] = [0; TENSOR_ARENA_SIZE];
 
-        let _ = MicroInterpreter::new(
-            &model,
-            all_op_resolver,
-            &mut tensor_arena[..],
-        )
-        .unwrap();
+        let _ =
+            MicroInterpreter::new(&model, op_resolver, &mut tensor_arena[..])
+                .unwrap();
     }
 
     #[cfg(feature = "alloc")]
@@ -376,44 +349,47 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn new_interpreter_alloc_arena() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         // model
-        let model = include_bytes!("../examples/models/hello_world.tflite");
+        let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/hello_world/models/hello_world_int8.tflite");
         let model = Model::from_buffer(&model[..]).unwrap();
 
         // resolver
-        let all_op_resolver = AllOpResolver::new();
+        let op_resolver = MutableOpResolver::empty();
 
         // arena
         let tensor_arena: Vec<u8> = vec![0u8; 4 * 1024];
 
-        let _ = MicroInterpreter::new(&model, all_op_resolver, tensor_arena)
-            .unwrap();
+        let _ =
+            MicroInterpreter::new(&model, op_resolver, tensor_arena).unwrap();
     }
 
     #[test]
     fn input_info() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         // model
-        let model = include_bytes!("../examples/models/hello_world.tflite");
+        let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/hello_world/models/hello_world_float.tflite");
         let model = Model::from_buffer(&model[..]).unwrap();
 
         // resolver
-        let all_op_resolver = AllOpResolver::new();
+        let op_resolver = MutableOpResolver::empty()
+            .add_quantize()
+            .add_fully_connected()
+            .add_dequantize();
 
         // arena
         const TENSOR_ARENA_SIZE: usize = 4 * 1024;
         let mut tensor_arena: [u8; TENSOR_ARENA_SIZE] = [0; TENSOR_ARENA_SIZE];
 
-        let interpreter = MicroInterpreter::new(
-            &model,
-            all_op_resolver,
-            &mut tensor_arena[..],
-        )
-        .unwrap();
+        let interpreter =
+            MicroInterpreter::new(&model, op_resolver, &mut tensor_arena[..])
+                .unwrap();
 
         let info = interpreter.input_info(0);
 
         // input tensor properties for hello_world example
-        assert_eq!(info.name, "dense_2_input");
         assert_eq!(info.element_type, ElementType::Float32);
         assert_eq!(info.dims, [1, 1]);
     }

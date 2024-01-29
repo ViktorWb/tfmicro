@@ -23,26 +23,27 @@ include = [
   "!vgcore.*",
   "!**/*_test.cc",              # No tests
   # Downloads
-  "submodules/tensorflow/tensorflow/lite/micro/tools/make/downloads/flatbuffers/include/**",
-  "submodules/tensorflow/tensorflow/lite/micro/tools/make/downloads/gemmlowp/**/*.h",
-  "submodules/tensorflow/tensorflow/lite/micro/tools/make/downloads/ruy",
-  "submodules/tensorflow/tensorflow/lite/micro/tools/make/downloads/cmsis",
-  "submodules/tensorflow/tensorflow/lite/micro/tools/make/downloads/kissfft",
+  "submodules/tflite-micro/tensorflow/lite/micro/tools/make/downloads/flatbuffers/include/**",
+  "submodules/tflite-micro/tensorflow/lite/micro/tools/make/downloads/gemmlowp/**/*.h",
+  "submodules/tflite-micro/tensorflow/lite/micro/tools/make/downloads/ruy",
+  "submodules/tflite-micro/tensorflow/lite/micro/tools/make/downloads/cmsis",
+  "submodules/tflite-micro/tensorflow/lite/micro/tools/make/downloads/kissfft",
   # Micro
-  "submodules/tensorflow/tensorflow/lite/micro/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/micro/kernels/**/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/micro/memory_planner/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/micro/testing/*.h",
+  "submodules/tflite-micro/tensorflow/lite/micro/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/micro/kernels/**/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/micro/tflite_bridge/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/micro/memory_planner/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/micro/testing/*.h",
   # Lite
-  "submodules/tensorflow/tensorflow/lite/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/c/**/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/kernels/**/*.[ch]*",
-  "submodules/tensorflow/tensorflow/lite/schema/schema_generated.h",
-  "submodules/tensorflow/tensorflow/lite/micro/memory_planner/*.cc",
-  "submodules/tensorflow/tensorflow/lite/experimental/microfrontend/lib",
-  "submodules/tensorflow/tensorflow/lite/core/api",
+  "submodules/tflite-micro/tensorflow/lite/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/c/**/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/kernels/**/*.[ch]*",
+  "submodules/tflite-micro/tensorflow/lite/schema/schema_generated.h",
+  "submodules/tflite-micro/tensorflow/lite/micro/memory_planner/*.cc",
+  "submodules/tflite-micro/tensorflow/lite/experimental/microfrontend/lib",
+  "submodules/tflite-micro/tensorflow/lite/core/api",
   # Core
-  "submodules/tensorflow/tensorflow/core/public/*.h",
+  "submodules/tflite-micro/tensorflow/core/public/*.h",
 ]
 
 [lib]
@@ -58,7 +59,6 @@ default-target = "x86_64-unknown-linux-gnu"
 cpp = "0.5"
 cty = "0.2"
 log = { version = "0.4", default-features = false }
-managed = { version = "0.8", default-features = false }
 ordered-float = { version = "~4.2", default-features = false }
 
 [build-dependencies]
@@ -71,15 +71,15 @@ glob = "0.3"
 
 [dev-dependencies]
 env_logger = "0.11"
+hound = "3.5"
 itertools = "0.12"
 
 [features]
+default = ["cpp-std"]
 build = []
-std = ["managed/std"]
-alloc = ["managed/alloc"]
 no-c-warnings = []
 cmsis-nn = []
-interop_cstd = []
+cpp-std = []
 
 [profile.release]
 debug = true # symbols are nice

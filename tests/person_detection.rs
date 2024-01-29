@@ -13,12 +13,12 @@ fn person_detection() {
 
     // Include trained model and test datasets
     let model =
-        include_bytes!("../examples/models/person_detection_grayscale.tflite");
+        include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/models/person_detect.tflite");
     let no_person = include_bytes!(
-        "../examples/models/no_person_image_data_grayscale.data"
+        "../submodules/tflite-micro/tensorflow/lite/micro/examples/person_detection/testdata/no_person.bmp"
     );
     let person =
-        include_bytes!("../examples/models/person_image_data_grayscale.data");
+        include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/person_detection/testdata/person.bmp");
 
     // Map the model into a usable data structure. This doesn't involve
     // any copying or parsing, it's a very lightweight operation.
@@ -29,9 +29,11 @@ fn person_detection() {
     let mut tensor_arena: [u8; TENSOR_ARENA_SIZE] = [0; TENSOR_ARENA_SIZE];
 
     let micro_op_resolver = MutableOpResolver::empty()
-        .depthwise_conv_2d()
-        .conv_2d()
-        .average_pool_2d();
+        .add_depthwise_conv_2d()
+        .add_conv_2d()
+        .add_average_pool_2d()
+        .add_reshape()
+        .add_softmax();
 
     // Build an interpreter to run the model with
     let mut interpreter =
@@ -50,7 +52,7 @@ fn person_detection() {
     // get output for 'person'
     let output_tensor = interpreter.output(0);
     assert_eq!(
-        [1, 1, 1, 3],
+        [1, 2],
         output_tensor.info().dims,
         "Dimensions of output tensor"
     );

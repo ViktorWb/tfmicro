@@ -1,79 +1,41 @@
 //! Tensorflow Lite Op Resolvers
 //!
 
-use crate::bindings::tflite;
-
 use core::fmt;
 
 cpp! {{
     #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
-    #include "tensorflow/lite/micro/kernels/all_ops_resolver.h"
 }}
 
-// AllOpsResolver has the same memory representation as
-// MicroMutableOpResolver<128>.
-//
-// That is:
-// class AllOpsResolver : public MicroMutableOpResolver<128> { ... }
-//
-// Thus we can cast between the two types.
+#[cfg(target_pointer_width = "64")]
+type InnerMutableOpResolver128 = [u64; 8728 / 8];
 
-type OpResolverT = tflite::ops::micro::AllOpsResolver;
-
-/// Marker trait for types that have the memory representation of a
-/// `OpResolver`
-pub trait OpResolverRepr {
-    fn to_inner(self) -> OpResolverT;
-}
-
-/// An Op Resolver populated with all available operators
-#[derive(Default)]
-pub struct AllOpResolver(OpResolverT);
-impl OpResolverRepr for AllOpResolver {
-    fn to_inner(self) -> OpResolverT {
-        self.0
-    }
-}
+#[cfg(target_pointer_width = "32")]
+type InnerMutableOpResolver128 = [u32; 4620 / 4];
 
 /// An Op Resolver that has no operators by default, but can be added by
 /// calling methods in a builder pattern
-#[derive(Default)]
 pub struct MutableOpResolver {
-    pub(crate) inner: OpResolverT,
+    pub(crate) inner: InnerMutableOpResolver128,
     capacity: usize,
     len: usize,
-}
-impl OpResolverRepr for MutableOpResolver {
-    fn to_inner(self) -> OpResolverT {
-        self.inner
-    }
 }
 impl fmt::Debug for MutableOpResolver {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("MutableOpResolver (ops = {})", self.len))
     }
 }
-
-impl AllOpResolver {
-    /// Create a new Op Resolver, populated with all available
-    /// operators
-    pub fn new() -> Self {
-        // The C++ compiler fills in the MicroMutableOpResolver with the
-        // operators enumerated in AllOpsResolver
-        let micro_op_resolver = unsafe {
-            cpp!([] -> OpResolverT as "tflite::ops::micro::AllOpsResolver" {
-                // All ops
-                tflite::ops::micro::AllOpsResolver resolver;
-
-                return resolver;
-            })
-        };
-
-        Self(micro_op_resolver)
+impl Default for MutableOpResolver {
+    fn default() -> Self {
+        Self::empty()
     }
 }
 
 impl MutableOpResolver {
+    pub(crate) fn to_inner(self) -> InnerMutableOpResolver128 {
+        self.inner
+    }
+
     /// Check the number of operators is OK
     pub(crate) fn check_then_inc_len(&mut self) {
         assert!(
@@ -98,18 +60,10 @@ impl MutableOpResolver {
     /// Create a new MutableOpResolver, initially empty
     pub fn empty() -> Self {
         // Maximum number of registrations
-        //
-        // tensorflow/lite/micro/kernels/all_ops_resolver.h:L27
         let tflite_registrations_max = 128;
 
         let micro_op_resolver = unsafe {
-            // Create resolver object
-            //
-            // We still need to take the full memory footprint of
-            // `MicroMutableOpResolver`, in order to be layout
-            // compatible. However the unreferenced operations themselves will
-            // be optimised away
-            cpp!([] -> OpResolverT as
+            cpp!([] -> InnerMutableOpResolver128 as
                  "tflite::MicroMutableOpResolver<128>" {
 
                 tflite::MicroMutableOpResolver<128> resolver;
@@ -130,15 +84,118 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_ops_resolver() {
-        let _ = AllOpResolver::new();
-    }
-
-    #[test]
     fn mutable_op_resolver() {
-        let _ = MutableOpResolver::empty()
-            .depthwise_conv_2d()
-            .fully_connected()
-            .softmax();
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut ops = MutableOpResolver::empty()
+            .add_abs()
+            .add_add()
+            .add_add_n()
+            .add_argmax()
+            .add_argmin()
+            .add_assign_variable()
+            .add_average_pool_2d()
+            .add_batch_mat_mul()
+            .add_batch_to_space_nd()
+            .add_broadcast_args()
+            .add_broadcast_to()
+            .add_call_once()
+            .add_cast()
+            .add_ceil()
+            .add_concatenation()
+            .add_conv_2d()
+            .add_cos()
+            .add_cum_sum()
+            .add_depth_to_space()
+            .add_depthwise_conv_2d()
+            .add_dequantize()
+            .add_div()
+            .add_elu()
+            .add_embedding_lookup()
+            .add_equal()
+            .add_ethos_u()
+            .add_exp()
+            .add_expand_dims()
+            .add_fill()
+            .add_floor()
+            .add_floor_div()
+            .add_floor_mod()
+            .add_fully_connected()
+            .add_gather()
+            .add_gather_nd()
+            .add_greater()
+            .add_greater_equal()
+            .add_hard_swish()
+            .add_if()
+            .add_l2_normalization()
+            .add_l2_pool_2d()
+            .add_leaky_relu()
+            .add_less()
+            .add_less_equal()
+            .add_log()
+            .add_log_softmax()
+            .add_maximum()
+            .add_max_pool_2d()
+            .add_mirror_pad()
+            .add_mean()
+            .add_minimum()
+            .add_mul()
+            .add_neg()
+            .add_not_equal()
+            .add_pack()
+            .add_pad_v2()
+            .add_prelu()
+            .add_quantize()
+            .add_read_variable()
+            .add_reduce_max()
+            .add_relu()
+            .add_relu6()
+            .add_reshape()
+            .add_resize_bilinear()
+            .add_resize_nearest_neighbor()
+            .add_round()
+            .add_rsqrt()
+            .add_select_v2()
+            .add_shape()
+            .add_sin()
+            .add_slice()
+            .add_softmax()
+            .add_space_to_batch_nd()
+            .add_space_to_depth()
+            .add_split()
+            .add_split_v()
+            .add_squeeze()
+            .add_sqrt()
+            .add_square()
+            .add_squared_difference()
+            .add_strided_slice()
+            .add_sub()
+            .add_svdf()
+            .add_tanh()
+            .add_transpose_conv()
+            .add_unpack()
+            .add_unidirectional_sequence_lstm()
+            .add_var_handle()
+            .add_zeros_like();
+
+        #[cfg(feature = "cpp-std")]
+        {
+            ops.add_circular_buffer()
+                .add_delay()
+                .add_detection_postprocess()
+                .add_energy()
+                .add_fft_auto_scale()
+                .add_filter_bank()
+                .add_filter_bank_log()
+                .add_filter_bank_spectral_subtraction()
+                .add_filter_bank_square_root()
+                .add_framer()
+                .add_irfft()
+                .add_overlap_add()
+                .add_pcan()
+                .add_rfft()
+                .add_stacker()
+                .add_window();
+        }
     }
 }

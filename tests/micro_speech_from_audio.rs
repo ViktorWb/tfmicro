@@ -34,13 +34,13 @@ fn micro_speech_with_audio() {
     env_logger::init();
     info!("---- Starting tensorflow micro example: micro_speech_from_audio");
 
-    let model = include_bytes!("../examples/models/micro_speech.tflite");
-    let no_1000ms = &include_bytes!("../examples/models/no_1000ms_sample.data")
+    let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/models/micro_speech_quantized.tflite");
+    let no_1000ms = &include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/testdata/no_1000ms.wav")
         .chunks_exact(2)
         .map(|c| i16::from_le_bytes([c[0], c[1]]))
         .collect_vec();
     let yes_1000ms =
-        &include_bytes!("../examples/models/yes_1000ms_sample.data")
+        &include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/testdata/yes_1000ms.wav")
             .chunks_exact(2)
             .map(|c| i16::from_le_bytes([c[0], c[1]]))
             .collect_vec();
@@ -59,9 +59,9 @@ fn micro_speech_with_audio() {
 
     // Pull in all needed operation implementations
     let micro_op_resolver = MutableOpResolver::empty()
-        .depthwise_conv_2d()
-        .fully_connected()
-        .softmax();
+        .add_depthwise_conv_2d()
+        .add_fully_connected()
+        .add_softmax();
 
     // Build an interpreter to run the model with
     let mut interpreter =

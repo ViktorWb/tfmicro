@@ -9,11 +9,31 @@ fn micro_speech() {
     env_logger::init();
     info!("---- Starting tensorflow micro example: micro_speech");
 
-    let model = include_bytes!("../examples/models/micro_speech.tflite");
+    let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/models/micro_speech_quantized.tflite");
     let no =
-        include_bytes!("../examples/models/no_micro_f9643d42_nohash_4.data");
+        include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/testdata/no_1000ms.wav");
     let yes =
-        include_bytes!("../examples/models/yes_micro_f2e59fea_nohash_1.data");
+        include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/micro_speech/testdata/yes_1000ms.wav");
+
+    let no = hound::WavReader::new(no.as_slice())
+        .unwrap()
+        .samples::<i16>()
+        .map(|x| {
+            ((x.unwrap() as f32) / (i16::MAX as f32) * (i8::MAX as f32)) as i8
+        })
+        .collect::<Vec<_>>();
+    let no = no.as_slice();
+
+    let yes = hound::WavReader::new(yes.as_slice())
+        .unwrap()
+        .samples::<i16>()
+        .map(|x| {
+            ((x.unwrap() as f32) / (i16::MAX as f32) * (i8::MAX as f32)) as i8
+        })
+        .collect::<Vec<_>>();
+    let yes = yes.as_slice();
+
+    println!("{}", no.len());
 
     // Map the model into a usable data structure. This doesn't involve
     // any copying or parsing, it's a very lightweight operation.
@@ -26,9 +46,10 @@ fn micro_speech() {
 
     // Pull in all needed operation implementations
     let micro_op_resolver = MutableOpResolver::empty()
-        .depthwise_conv_2d()
-        .fully_connected()
-        .softmax();
+        .add_depthwise_conv_2d()
+        .add_fully_connected()
+        .add_softmax()
+        .add_reshape();
 
     info!("Resolver: {:?}", micro_op_resolver);
 
@@ -38,7 +59,11 @@ fn micro_speech() {
             .unwrap();
 
     // Check properties of the input sensor
-    assert_eq!([1, 49, 40, 1], interpreter.input_info(0).dims);
+    assert_eq!([1, 1960], interpreter.input_info(0).dims);
+    assert_eq!(
+        tfmicro::ElementType::Int8,
+        interpreter.input_info(0).element_type
+    );
 
     // -------- 'yes' example --------
     interpreter.input(0, yes).unwrap();

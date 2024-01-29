@@ -169,6 +169,12 @@ pub enum Status {
     Ok,
     Error,
     DelegateError,
+    ApplicationError,
+    DelegateDataNotFound,
+    DelegateDataWriteError,
+    DelegateDataReadError,
+    UnresolvedOps,
+    Cancelled,
 }
 impl From<bindings::TfLiteStatus> for Status {
     fn from(status: bindings::TfLiteStatus) -> Self {
@@ -178,11 +184,22 @@ impl From<bindings::TfLiteStatus> for Status {
             bindings::TfLiteStatus::kTfLiteOk => Ok,
             bindings::TfLiteStatus::kTfLiteError => Error,
             bindings::TfLiteStatus::kTfLiteDelegateError => DelegateError,
+            bindings::TfLiteStatus::kTfLiteApplicationError => ApplicationError,
+            bindings::TfLiteStatus::kTfLiteDelegateDataNotFound => {
+                DelegateDataNotFound
+            }
+            bindings::TfLiteStatus::kTfLiteDelegateDataWriteError => {
+                DelegateDataWriteError
+            }
+            bindings::TfLiteStatus::kTfLiteDelegateDataReadError => {
+                DelegateDataReadError
+            }
+            bindings::TfLiteStatus::kTfLiteUnresolvedOps => UnresolvedOps,
+            bindings::TfLiteStatus::kTfLiteCancelled => Cancelled,
         }
     }
 }
 
-mod micro_error_reporter;
 mod operators;
 
 mod frontend;
@@ -193,6 +210,6 @@ mod tensor;
 
 pub use frontend::Frontend;
 pub use micro_interpreter::MicroInterpreter;
-pub use micro_op_resolver::{AllOpResolver, MutableOpResolver};
+pub use micro_op_resolver::MutableOpResolver;
 pub use model::Model;
 pub use tensor::*;

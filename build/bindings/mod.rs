@@ -65,8 +65,6 @@ fn bindgen_cross_builder() -> anyhow::Result<bindgen::Builder> {
 }
 
 pub fn bindgen_tflite_types() {
-    let submodules = crate::paths::submodules();
-    let submodules_str = submodules.to_string_lossy();
     let out_dir = crate::paths::out_dir();
     let tflite_types_name = Path::new(&out_dir).join("tflite_types.rs");
 
@@ -74,7 +72,7 @@ pub fn bindgen_tflite_types() {
         println!("Running bindgen");
         let start = Instant::now();
 
-        let bindings = bindgen_cross_builder()
+        let mut bindings = bindgen_cross_builder()
             .expect("Error setting up bindgen for cross compiling")
             .allowlist_recursively(true)
             .prepend_enum_name(false)
@@ -87,14 +85,11 @@ pub fn bindgen_tflite_types() {
             .use_core()
             .ctypes_prefix("cty")
             // Types
-            .allowlist_type("tflite::MicroErrorReporter")
-            .opaque_type("tflite::MicroErrorReporter")
             .allowlist_type("tflite::Model")
             .opaque_type("tflite::Model")
             .allowlist_type("tflite::MicroInterpreter")
             .opaque_type("tflite::MicroInterpreter")
-            .allowlist_type("tflite::ops::micro::AllOpsResolver")
-            .opaque_type("tflite::ops::micro::AllOpsResolver")
+            .allowlist_type("TfLiteStatus")
             .allowlist_type("TfLiteTensor")
             .allowlist_type("FrontendState")
             .allowlist_type("FrontendConfig")
@@ -103,6 +98,7 @@ pub fn bindgen_tflite_types() {
             .blocklist_type("std")
             .blocklist_item("std::vector__Temporary_value")
             .blocklist_item("std::vector__Temporary_value__Storage")
+            .blocklist_item("std::_Rb_tree_insert_return_type")
             .blocklist_type("tflite::Interpreter_TfLiteDelegatePtr")
             .blocklist_type("tflite::Interpreter_State")
             .default_enum_style(EnumVariation::Rust {
@@ -111,15 +107,19 @@ pub fn bindgen_tflite_types() {
             .derive_partialeq(true)
             .derive_eq(true)
             .header("csrc/tflite_wrapper.hpp")
-            .clang_arg(format!("-I{}/tensorflow", submodules_str))
             .clang_arg(format!(
-                // -> flatbuffers/flatbuffers.h
                 "-I{}",
-                crate::paths::flatbuffers_include_dir().to_string_lossy()
+                crate::paths::tflite_micro_submodule().display()
             ))
+            .clang_arg("-DTF_LITE_STATIC_MEMORY")
+            .clang_arg("-DTF_LITE_MCU_DEBUG_LOG")
             .clang_arg("-DGEMMLOWP_ALLOW_SLOW_SCALAR_FALLBACK")
             .clang_arg("-xc++")
             .clang_arg("-std=c++11");
+
+        for p in crate::paths::additional_include_dirs() {
+            bindings = bindings.clang_arg(format!("-I{}", p.display(),));
+        }
 
         let bindings =
             bindings.generate().expect("Unable to generate bindings");

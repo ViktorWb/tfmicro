@@ -45,7 +45,9 @@ mod tests {
 
     #[test]
     fn model_from_buffer() {
-        let model = include_bytes!("../examples/models/hello_world.tflite");
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let model = include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/hello_world/models/hello_world_int8.tflite");
 
         // Instantiate the model
         let _ = Model::from_buffer(&model[..]).unwrap();
@@ -54,7 +56,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn bad_model_from_buffer() {
-        let model = &include_bytes!("../examples/models/hello_world.tflite");
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let model = &include_bytes!("../submodules/tflite-micro/tensorflow/lite/micro/examples/hello_world/models/hello_world_int8.tflite");
 
         let _ = Model::from_buffer(&model[..88]).unwrap();
         //                                  ^^

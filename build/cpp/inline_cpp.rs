@@ -3,18 +3,19 @@ use std::time::Instant;
 use super::CompilationBuilder;
 
 pub fn build_inline_cpp() {
-    let submodules = crate::paths::submodules();
-
     println!("Building inline cpp");
     let start = Instant::now();
 
-    cpp_build::Config::new()
-        .include(submodules.join("tensorflow"))
-        .include(crate::paths::flatbuffers_include_dir())
-        .tensorflow_build_setup()
-        .cpp_link_stdlib(None)
-        //.flag("-std=c++14")
-        .build("src/lib.rs");
+    let mut builder = cpp_build::Config::new();
+    builder.include(crate::paths::tflite_micro_submodule());
+    for p in crate::paths::additional_include_dirs() {
+        builder.include(p);
+    }
+
+    #[cfg(not(feature = "cpp-std"))]
+    builder.cpp_link_stdlib(None);
+
+    builder.tensorflow_build_setup().build("src/lib.rs");
 
     println!("Building inline cpp took {:?}", start.elapsed());
 }
